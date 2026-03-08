@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  memgraph:
+    image: memgraph/memgraph-platform:latest
+    container_name: lattice-db
+    ports:
+      - "7687:7687" # Bolt protocol
+      - "3000:3000" # Memgraph Lab (UI)
+
+  redis:
+    image: redis:7-alpine
+    container_name: lattice-coordinator
+    ports:
+      - "6379:6379"
+
+  api:
+    build: .
+    container_name: lattice-api
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - MEMGRAPH_HOST=memgraph
+      - MEMGRAPH_PORT=7687
+      - REDIS_HOST=redis
+    depends_on:
+      - memgraph
+      - redis
