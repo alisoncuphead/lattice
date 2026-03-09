@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Optional
 from app.models.nodes import Victim
 from app.repositories.nodes import VictimRepository
-from app.middleware.workspace import get_active_workspace
+from app.middleware.workspace import get_active_workspace, get_current_user
 from app.services.resolver import ShadowResolver
+from app.services.lock_manager import LockManager
 
 router = APIRouter(prefix="/victims", tags=["Victims"])
 repo = VictimRepository()
@@ -18,11 +19,24 @@ async def list_victims(
 
 @router.post("/", response_model=Victim)
 async def create_victim(
-    victim: Victim, workspace_id: Optional[str] = Depends(get_active_workspace)
+    victim: Victim,
+    workspace_id: Optional[str] = Depends(get_active_workspace),
+    user_id: str = Depends(get_current_user),
 ):
     victim.workspace_id = workspace_id
     if not victim.uid:
         victim.uid = Victim.create_uid({"identity": victim.identity})
+
+    # COLLISION CHECK: If node exists, check if it's locked by someone else
+    existing = repo.get_by_uid(victim.uid, workspace_id=workspace_id)
+    if existing:
+        locked_by = LockManager.check_lock(victim.uid)
+        if locked_by and locked_by != user_id:
+            raise HTTPException(
+                status_code=423,
+                detail=f"Node {victim.uid} is currently locked by {locked_by}",
+            )
+
     return repo.create(victim)
 
 

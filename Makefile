@@ -38,11 +38,11 @@ lint:
 	PYTHONPATH=. ./venv/bin/mypy --explicit-package-bases app/ --ignore-missing-imports
 	cd frontend && npx prettier --write . && npm run build
 
-# Clean up temporary files
-clean:
-	rm -rf venv
-	rm -rf frontend/node_modules
-	rm -rf frontend/dist
-	find . -type d -name "__pycache__" -exec rm -rf {} +
-	find . -type d -name ".pytest_cache" -exec rm -rf {} +
-	find . -type d -name ".mypy_cache" -exec rm -rf {} +
+# Seed the database with advanced mock data
+seed: run-api
+	@echo "Waiting for API to start..."
+	@sleep 3
+	PYTHONPATH=. ./venv/bin/python3 seed_data.py
+
+# Full reset: clean, setup, and seed
+reset: stop-infra clean setup start-infra seed

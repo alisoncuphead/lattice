@@ -11,6 +11,7 @@ class DiamondNode(BaseModel):
 
     uid: Optional[str] = None  # Optional in request, generated in repo/route
     workspace_id: Optional[str] = None
+    is_deleted: bool = False
 
     @classmethod
     def create_uid(cls, primary_data: dict) -> str:

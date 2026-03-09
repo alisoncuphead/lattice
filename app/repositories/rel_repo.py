@@ -19,7 +19,8 @@ class RelationshipRepository:
         SET r.valid_from = $valid_from,
             r.valid_to = $valid_to,
             r.confidence = $confidence,
-            r.description = $description
+            r.description = $description,
+            r.is_deleted = false
         RETURN r
         """
         params = {
@@ -59,6 +60,7 @@ class RelationshipRepository:
         WITH s.uid AS source_uid, t.uid AS target_uid, type(r) AS rel_type, r, s, t
         ORDER BY r.workspace_id DESC
         WITH source_uid, target_uid, rel_type, head(collect(r)) AS resolved_rel, head(collect(s)) AS source_node, head(collect(t)) AS target_node
+        WHERE resolved_rel.is_deleted IS NULL OR resolved_rel.is_deleted = false
         RETURN resolved_rel, source_node, target_node, rel_type
         """
         results = db.execute_and_fetch(query, parameters=params)
@@ -78,13 +80,26 @@ class RelationshipRepository:
 
     @staticmethod
     def delete_relationship(source_uid: str, target_uid: str, rel_type: str, workspace_id: Optional[str] = None):
-        query = f"""
-        MATCH (s {{uid: $source_uid}})-[r:{rel_type}]->(t {{uid: $target_uid}})
-        WHERE r.workspace_id = $workspace_id
-        DELETE r
-        """
-        db.execute(query, parameters={
-            "source_uid": source_uid,
-            "target_uid": target_uid,
-            "workspace_id": workspace_id
-        })
+        if workspace_id is None:
+            # Production Hard Delete
+            query = f"""
+            MATCH (s {{uid: $source_uid}})-[r:{rel_type}]->(t {{uid: $target_uid}})
+            WHERE r.workspace_id IS NULL
+            DELETE r
+            """
+            db.execute(query, parameters={
+                "source_uid": source_uid,
+                "target_uid": target_uid
+            })
+        else:
+            # Workspace Tombstone
+            query = f"""
+            MATCH (s {{uid: $source_uid}}), (t {{uid: $target_uid}})
+            MERGE (s)-[r:{rel_type} {{workspace_id: $workspace_id}}]->(t)
+            SET r.is_deleted = true
+            """
+            db.execute(query, parameters={
+                "source_uid": source_uid,
+                "target_uid": target_uid,
+                "workspace_id": workspace_id
+            })

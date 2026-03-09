@@ -8,6 +8,7 @@ class DiamondRelationship(BaseModel):
     valid_to: Optional[datetime] = None
     confidence: float = 100.0
     workspace_id: Optional[str] = None
+    is_deleted: bool = False
 
 
 class UsesInfrastructure(DiamondRelationship):

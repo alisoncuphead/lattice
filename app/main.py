@@ -8,6 +8,8 @@ from app.routes import (
     capability,
     victim,
     relationships,
+    locks,
+    analysis,
 )
 from app.database import init_db
 
@@ -40,6 +42,8 @@ app.include_router(victim.router)
 app.include_router(relationships.router)
 app.include_router(workspaces.router)
 app.include_router(tags.router)
+app.include_router(locks.router)
+app.include_router(analysis.router)
 
 
 @app.get("/")

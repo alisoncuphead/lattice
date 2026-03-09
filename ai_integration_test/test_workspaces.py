@@ -74,3 +74,36 @@ def test_workspace_listing_shadow(client):
     # Should only see 'p2', not 'p1' for the same IP
     assert any(x["provider"] == "p2" for x in list_ws.json())
     assert not any(x["provider"] == "p1" for x in list_ws.json())
+
+
+def test_tombstone_deletion(client):
+    """
+    Test that deleting a production node in a workspace creates a tombstone
+    that hides the node, and promoting it deletes the production node.
+    """
+    # 1. Create in Production
+    infra = client.post(
+        "/infrastructure/", json={"value": "10.10.10.10", "infra_type": "ip"}
+    ).json()
+    uid = infra["uid"]
+
+    # 2. Delete in Workspace A
+    ws_headers = {"X-Lattice-Workspace": "ws-tombstone"}
+    del_res = client.delete(f"/infrastructure/{uid}", headers=ws_headers)
+    assert del_res.status_code == 200
+
+    # 3. Verify it's GONE in Workspace A
+    get_ws = client.get(f"/infrastructure/{uid}", headers=ws_headers)
+    assert get_ws.status_code == 404
+
+    # 4. Verify it's still THERE in Production
+    get_prod = client.get(f"/infrastructure/{uid}")
+    assert get_prod.status_code == 200
+
+    # 5. Promote Workspace A
+    promote_res = client.post("/workspaces/ws-tombstone/promote")
+    assert promote_res.status_code == 200
+
+    # 6. Now it should be GONE in Production too
+    get_prod_after = client.get(f"/infrastructure/{uid}")
+    assert get_prod_after.status_code == 404

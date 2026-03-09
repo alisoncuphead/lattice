@@ -3,6 +3,7 @@ from typing import Optional
 from app.database import redis_client
 
 WORKSPACE_HEADER = "X-Lattice-Workspace"
+USER_HEADER = "X-Lattice-User"
 
 
 async def get_active_workspace(
@@ -29,3 +30,13 @@ async def get_active_workspace(
 
     # If no workspace is provided, it defaults to None (Production base)
     return None
+
+
+async def get_current_user(
+    x_lattice_user: Optional[str] = Header(None, alias=USER_HEADER),
+) -> str:
+    """
+    Dependency to retrieve the current user ID from the header.
+    Defaults to 'anonymous' if not provided for prototyping.
+    """
+    return x_lattice_user or "anonymous"

@@ -28,6 +28,11 @@ class BaseRepository(Generic[T]):
             return None
         node_data = res[0]["n"]
         props = node_data if isinstance(node_data, dict) else node_data._properties
+        
+        # Check for tombstone
+        if props.get("is_deleted"):
+            return None
+
         if "workspace_id" not in props:
             props["workspace_id"] = None
         return self.model(**props)
@@ -35,10 +40,10 @@ class BaseRepository(Generic[T]):
     def create(self, node: T) -> T:
         query = f"""
         MERGE (n:{self.label} {{uid: $uid, workspace_id: $workspace_id}})
-        SET n += $props
+        SET n:DiamondNode, n.is_deleted = false, n += $props
         RETURN n
         """
-        props = node.model_dump(exclude={"uid", "workspace_id"})
+        props = node.model_dump(exclude={"uid", "workspace_id", "is_deleted"})
         results = db.execute_and_fetch(
             query,
             parameters={
@@ -54,6 +59,23 @@ class BaseRepository(Generic[T]):
             props["workspace_id"] = None
         return self.model(**props)
 
+    def delete(self, uid: str, workspace_id: Optional[str] = None):
+        """
+        Hard delete if in Production (workspace_id=None).
+        Create a Tombstone if in a Workspace.
+        """
+        if workspace_id is None:
+            # Production Hard Delete
+            query = f"MATCH (n:{self.label} {{uid: $uid}}) WHERE n.workspace_id IS NULL DETACH DELETE n"
+            db.execute(query, parameters={"uid": uid})
+        else:
+            # Workspace Tombstone
+            query = f"""
+            MERGE (n:{self.label} {{uid: $uid, workspace_id: $workspace_id}})
+            SET n:DiamondNode, n.is_deleted = true
+            """
+            db.execute(query, parameters={"uid": uid, "workspace_id": workspace_id})
+
     def list(self, workspace_id: Optional[str] = None, limit: int = 100) -> List[T]:
         query = f"""
         MATCH (n:{self.label})
@@ -61,6 +83,7 @@ class BaseRepository(Generic[T]):
         WITH n.uid AS uid, n
         ORDER BY CASE WHEN n.workspace_id IS NULL THEN 1 ELSE 0 END ASC
         WITH uid, head(collect(n)) AS final_node
+        WHERE final_node.is_deleted IS NULL OR final_node.is_deleted = false
         RETURN final_node
         LIMIT $limit
         """

@@ -14,4 +14,12 @@ export const setWorkspaceHeader = (workspaceId: string | null) => {
   }
 };
 
+export const setUserHeader = (userId: string | null) => {
+  if (userId) {
+    client.defaults.headers.common["X-Lattice-User"] = userId;
+  } else {
+    delete client.defaults.headers.common["X-Lattice-User"];
+  }
+};
+
 export default client;

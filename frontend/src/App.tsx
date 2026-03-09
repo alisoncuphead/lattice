@@ -11,11 +11,15 @@ import {
   Sun,
   Moon,
   RefreshCw,
+  Route,
 } from "lucide-react";
 import { format } from "date-fns";
-import client, { setWorkspaceHeader } from "./api/client";
+import client, { setWorkspaceHeader, setUserHeader } from "./api/client";
 import type { DiamondNode, Relationship, Conflict } from "./types";
 import "./App.css";
+
+// Generate a random user ID for prototyping
+const RANDOM_USER_ID = "analyst-" + Math.random().toString(36).substring(2, 7);
 
 function App() {
   const cyRef = useRef<HTMLDivElement>(null);
@@ -23,13 +27,39 @@ function App() {
 
   const [nodes, setNodes] = useState<DiamondNode[]>([]);
   const [selectedNode, setSelectedNode] = useState<DiamondNode | null>(null);
+  const [pathStartNode, setPathStartNode] = useState<DiamondNode | null>(null);
+  const [isPathMode, setIsPathMode] = useState(false);
+  const [lockedBy, setLockedBy] = useState<string | null>(null);
   const [activeWorkspace, setActiveWorkspace] = useState<string | null>(null);
+  const [workspaces, setWorkspaces] = useState<string[]>([]);
+  const [userId] = useState<string>(RANDOM_USER_ID);
   const [atTimestamp, setAtTimestamp] = useState<number>(
     Math.floor(Date.now() / 1000),
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
+
+  useEffect(() => {
+    setUserHeader(userId);
+  }, [userId]);
+
+  // Check for locks when a node is selected
+  useEffect(() => {
+    const checkNodeLock = async () => {
+      if (selectedNode) {
+        try {
+          const res = await client.get(`/locks/${selectedNode.uid}`);
+          setLockedBy(res.data.locked_by);
+        } catch (err) {
+          console.error("Failed to check lock", err);
+        }
+      } else {
+        setLockedBy(null);
+      }
+    };
+    checkNodeLock();
+  }, [selectedNode]);
 
   const getThemeColor = useCallback((variable: string) => {
     return getComputedStyle(document.documentElement).getPropertyValue(variable).strip ? 
@@ -96,12 +126,29 @@ function App() {
             "border-color": "var(--accent-color)",
           },
         },
+        {
+          selector: ".path-highlight",
+          style: {
+            "border-width": 5,
+            "border-color": "var(--warning-color)",
+          },
+        },
       ],
       layout: { name: "cose" },
     });
 
     cyInstance.current.on("select", "node", (evt) => {
-      setSelectedNode(evt.target.data("raw"));
+      const nodeData = evt.target.data("raw");
+      setSelectedNode(nodeData);
+      
+      if (isPathMode) {
+        if (!pathStartNode) {
+          setPathStartNode(nodeData);
+          alert("Now select the TARGET node.");
+        } else if (pathStartNode.uid !== nodeData.uid) {
+          findPath(nodeData);
+        }
+      }
     });
 
     cyInstance.current.on("unselect", "node", () => {
@@ -129,13 +176,16 @@ function App() {
     try {
       setWorkspaceHeader(activeWorkspace);
 
-      const [infraRes, advRes, capRes, vicRes, relRes] = await Promise.all([
+      const [infraRes, advRes, capRes, vicRes, relRes, wsRes] = await Promise.all([
         client.get("/infrastructure/"),
         client.get("/adversaries/"),
         client.get("/capabilities/"),
         client.get("/victims/"),
         client.get(`/relationships/?at=${atTimestamp}`),
+        client.get("/workspaces/"),
       ]);
+
+      setWorkspaces(wsRes.data);
 
       const allNodes = [
         ...infraRes.data.map((n: any) => ({ ...n, label: "Infrastructure", name: n.value })),
@@ -198,6 +248,38 @@ function App() {
     setTheme(theme === "dark" ? "light" : "dark");
   };
 
+  const findPath = async (targetNode: DiamondNode) => {
+    if (!pathStartNode) return;
+    try {
+      const res = await client.get(`/analysis/path?source_uid=${pathStartNode.uid}&target_uid=${targetNode.uid}&at=${atTimestamp}`);
+      const pathData = res.data;
+      
+      if (pathData.length === 0) {
+        alert("No path found between these nodes.");
+        return;
+      }
+
+      if (cyInstance.current) {
+        // Reset styles first
+        cyInstance.current.elements().removeClass("path-highlight");
+        
+        // Highlight path elements
+        pathData.forEach((step: any) => {
+          if (step.type === "node") {
+            cyInstance.current?.getElementById(step.data.uid).addClass("path-highlight");
+          } else {
+            // Relationships are harder to target without unique IDs, 
+            // but we can find edges between the surrounding nodes in the path
+          }
+        });
+      }
+      setPathStartNode(null);
+      setIsPathMode(false);
+    } catch (err) {
+      alert("Path analysis failed.");
+    }
+  };
+
   const handlePromote = async () => {
     if (!activeWorkspace) return;
     try {
@@ -230,8 +312,9 @@ function App() {
                 style={{ flex: 1 }}
               >
                 <option value="production">Production (Main)</option>
-                <option value="war-room-alpha">War Room Alpha</option>
-                <option value="war-room-beta">War Room Beta</option>
+                {workspaces.map(ws => (
+                  <option key={ws} value={ws}>{ws}</option>
+                ))}
               </select>
               <button className="secondary" onClick={fetchData} title="Refresh Data">
                 <RefreshCw size={16} />
@@ -246,6 +329,25 @@ function App() {
               </button>
             </div>
           )}
+
+          <div style={{ marginBottom: "20px" }}>
+            <button 
+              className={isPathMode ? "warning" : "secondary"} 
+              onClick={() => {
+                if (isPathMode) {
+                  setIsPathMode(false);
+                  setPathStartNode(null);
+                  cyInstance.current?.elements().removeClass("path-highlight");
+                } else {
+                  setIsPathMode(true);
+                  alert("Select the START node for path analysis.");
+                }
+              }} 
+              style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}
+            >
+              <Route size={16} /> {isPathMode ? "Cancel Analysis" : "Path Analysis (Shortest Path)"}
+            </button>
+          </div>
 
           <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "20px", marginBottom: "20px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "15px" }}>
@@ -280,9 +382,16 @@ function App() {
               <div className="node-card active">
                 <div style={{ fontWeight: 700, marginBottom: "10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span>{(selectedNode as any).name || (selectedNode as any).value}</span>
-                  <span className={`workspace-badge ${selectedNode.workspace_id ? "badge-workspace" : "badge-production"}`}>
-                    {selectedNode.workspace_id ? "Workspace" : "Production"}
-                  </span>
+                  <div style={{ display: "flex", gap: "5px" }}>
+                    {lockedBy && (
+                      <span className="workspace-badge" style={{ backgroundColor: "var(--error-color)", fontSize: "0.6rem" }}>
+                        Locked by {lockedBy === userId ? "You" : lockedBy}
+                      </span>
+                    )}
+                    <span className={`workspace-badge ${selectedNode.workspace_id ? "badge-workspace" : "badge-production"}`}>
+                      {selectedNode.workspace_id ? "Workspace" : "Production"}
+                    </span>
+                  </div>
                 </div>
                 <div className="property-list">
                   <div className="property-item">
@@ -345,6 +454,10 @@ function App() {
             <div className={`workspace-badge ${activeWorkspace ? "badge-workspace" : "badge-production"}`}>
               {activeWorkspace ? `WS: ${activeWorkspace}` : "Stratum: Production"}
             </div>
+            <div style={{ fontSize: "0.75rem", color: "#64748b", display: "flex", alignItems: "center", gap: "5px" }}>
+              <Info size={14} />
+              User: <span style={{ color: "var(--accent-color)", fontWeight: 700 }}>{userId}</span>
+            </div>
           </div>
         </div>
 
@@ -354,7 +467,7 @@ function App() {
           <Clock size={20} color="var(--accent-color)" />
           <div style={{ flex: 1 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px", fontSize: "0.75rem", color: "#64748b" }}>
-              <span>HISTORICAL</span>
+              <span>HISTORICAL (90d)</span>
               <span style={{ color: "var(--accent-color)", fontWeight: 700 }}>
                 {format(atTimestamp * 1000, "yyyy-MM-dd HH:mm:ss")}
               </span>
@@ -362,7 +475,7 @@ function App() {
             </div>
             <input
               type="range"
-              min={Math.floor(Date.now() / 1000) - 31536000}
+              min={Math.floor(Date.now() / 1000) - 7776000} // 90 days
               max={Math.floor(Date.now() / 1000)}
               value={atTimestamp}
               onChange={(e) => setAtTimestamp(parseInt(e.target.value))}
