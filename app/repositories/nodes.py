@@ -1,5 +1,5 @@
 from app.repositories.base import BaseRepository
-from app.models.nodes import Adversary, Infrastructure, Capability, Victim, Tag
+from app.models.nodes import Adversary, Infrastructure, Capability, Victim, Tag, Malware
 
 
 class AdversaryRepository(BaseRepository[Adversary]):
@@ -15,6 +15,11 @@ class InfrastructureRepository(BaseRepository[Infrastructure]):
 class CapabilityRepository(BaseRepository[Capability]):
     def __init__(self):
         super().__init__(Capability)
+
+
+class MalwareRepository(BaseRepository[Malware]):
+    def __init__(self):
+        super().__init__(Malware)
 
 
 class VictimRepository(BaseRepository[Victim]):

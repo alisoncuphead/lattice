@@ -18,10 +18,11 @@ class ActorType(str, Enum):
 
 
 class CapabilityType(str, Enum):
-    MALWARE = "malware"
     TOOLKIT = "toolkit"
     EXPLOIT = "exploit"
     WEB_SHELL = "web_shell"
+    COMMAND_AND_CONTROL = "c2_framework"
+    TTP = "ttp"
 
 
 class WorkspaceStatus(str, Enum):

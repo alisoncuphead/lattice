@@ -10,6 +10,7 @@ from app.routes import (
     relationships,
     locks,
     analysis,
+    malware,
 )
 from app.database import init_db
 
@@ -44,6 +45,7 @@ app.include_router(workspaces.router)
 app.include_router(tags.router)
 app.include_router(locks.router)
 app.include_router(analysis.router)
+app.include_router(malware.router)
 
 
 @app.get("/")

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Optional
 from app.models.nodes import Infrastructure
+from app.models.requests import BulkInfrastructureRequest
 from app.repositories.nodes import InfrastructureRepository
 from app.middleware.workspace import get_active_workspace, get_current_user
 from app.services.resolver import ShadowResolver
@@ -12,9 +13,33 @@ repo = InfrastructureRepository()
 
 @router.get("/", response_model=List[Infrastructure])
 async def list_infrastructure(
-    workspace_id: Optional[str] = Depends(get_active_workspace), limit: int = 100
+    workspace_id: Optional[str] = Depends(get_active_workspace),
+    limit: int = 100,
+    query: Optional[str] = None,
+    tags: Optional[List[str]] = None,
 ):
-    return repo.list(workspace_id=workspace_id, limit=limit)
+    return repo.search(workspace_id=workspace_id, limit=limit, query=query, tags=tags)
+
+
+@router.post("/bulk", response_model=List[Infrastructure])
+async def bulk_lookup_infrastructure(
+    request: BulkInfrastructureRequest,
+    workspace_id: Optional[str] = Depends(get_active_workspace),
+):
+    """
+    Check if a list of values exists in the current workspace or production.
+    Useful for Carbon's bulk search view.
+    """
+    # Calculate UIDs for all values provided
+    uids = []
+    for val in request.values:
+        # We don't know the exact infra_type, but Infrastructure.create_uid
+        # uses the raw value. Note: If we want higher accuracy, we'd need
+        # to detect type (IP/Domain) here, but Infrastructure.create_uid
+        # currently just needs the 'value' field for hashing.
+        uids.append(Infrastructure.create_uid({"value": val}))
+    
+    return repo.get_bulk_by_uids(uids, workspace_id=workspace_id)
 
 
 @router.post("/", response_model=Infrastructure)

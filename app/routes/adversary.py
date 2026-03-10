@@ -12,9 +12,12 @@ repo = AdversaryRepository()
 
 @router.get("/", response_model=List[Adversary])
 async def list_adversaries(
-    workspace_id: Optional[str] = Depends(get_active_workspace), limit: int = 100
+    workspace_id: Optional[str] = Depends(get_active_workspace),
+    limit: int = 100,
+    query: Optional[str] = None,
+    tags: Optional[List[str]] = None,
 ):
-    return repo.list(workspace_id=workspace_id, limit=limit)
+    return repo.search(workspace_id=workspace_id, limit=limit, query=query, tags=tags)
 
 
 @router.post("/", response_model=Adversary)

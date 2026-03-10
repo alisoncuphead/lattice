@@ -20,7 +20,10 @@ class RelationshipRepository:
             r.valid_to = $valid_to,
             r.confidence = $confidence,
             r.description = $description,
-            r.is_deleted = false
+            r.relationship_type = $relationship_type,
+            r.source_vendor = $source_vendor,
+            r.is_deleted = false,
+            r += $context
         RETURN r
         """
         params = {
@@ -30,7 +33,10 @@ class RelationshipRepository:
             "valid_from": valid_from,
             "valid_to": valid_to,
             "confidence": data.confidence,
-            "description": data.description
+            "description": data.description,
+            "relationship_type": data.relationship_type,
+            "source_vendor": data.source_vendor,
+            "context": data.context
         }
         db.execute(query, parameters=params)
 

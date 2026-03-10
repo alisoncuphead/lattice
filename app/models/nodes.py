@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 from app.models.enums import InfrastructureType, ActorType, CapabilityType
 from app.utils.uid import generate_deterministic_uid
@@ -36,6 +36,18 @@ class Capability(DiamondNode):
     cap_type: CapabilityType
     version: Optional[str] = None
     hash: Optional[str] = None
+
+
+class Malware(DiamondNode):
+    name: str
+    family: Optional[str] = None
+    md5: Optional[str] = None
+    sha1: Optional[str] = None
+    sha256: Optional[str] = None
+    first_seen: Optional[float] = None
+    last_seen: Optional[float] = None
+    metadata: Dict[str, Any] = {}
+    source: Optional[str] = None
 
 
 class Victim(DiamondNode):

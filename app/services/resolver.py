@@ -47,7 +47,7 @@ class ShadowResolver:
         WHERE (r.workspace_id = $workspace_id OR r.workspace_id IS NULL)
         {temporal_clause}
         WITH type(r) AS rel_type, m.uid AS target_uid, r, m
-        ORDER BY r.workspace_id DESC
+        ORDER BY CASE WHEN r.workspace_id IS NULL THEN 1 ELSE 0 END ASC
         WITH rel_type, target_uid, head(collect(r)) AS resolved_rel, head(collect(m)) AS target_node
         WHERE resolved_rel.is_deleted IS NULL OR resolved_rel.is_deleted = false
         RETURN resolved_rel, target_node, rel_type
